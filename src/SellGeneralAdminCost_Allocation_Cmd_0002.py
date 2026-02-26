@@ -1975,6 +1975,17 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
         objRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]],
     ) -> List[str]:
         objResultLines: List[str] = [f"{pszLabel}:"]
+        if len(objRanges) >= 3:
+            (iTwoPeriodsAgoStartYear, iTwoPeriodsAgoStartMonth), (iTwoPeriodsAgoEndYear, iTwoPeriodsAgoEndMonth) = objRanges[-3]
+            objResultLines.extend(
+                [
+                    "2期前(前期の前期)",
+                    f"開始: {iTwoPeriodsAgoStartYear:04d}/{iTwoPeriodsAgoStartMonth:02d}",
+                    f"終了: {iTwoPeriodsAgoEndYear:04d}/{iTwoPeriodsAgoEndMonth:02d}",
+                ]
+            )
+        else:
+            objResultLines.extend(["2期前(前期の前期)", "なし。"])
         if len(objRanges) >= 2:
             (iPriorStartYear, iPriorStartMonth), (iPriorEndYear, iPriorEndMonth) = objRanges[-2]
             objResultLines.extend(
@@ -2013,6 +2024,8 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
     )
     with open(pszAccountPeriodPath, "w", encoding="utf-8", newline="") as objFile:
         objFile.write("\n".join(objAccountPeriodLines) + "\n")
+
+    write_cp_previous_period_range_file(pszDirectory, objRange)
     if EXECUTION_ROOT_DIRECTORY:
         pszPeriodDirectory = os.path.join(EXECUTION_ROOT_DIRECTORY, "期間")
         os.makedirs(pszPeriodDirectory, exist_ok=True)
@@ -2099,6 +2112,57 @@ def split_by_fiscal_boundary(
             objRangeStart = objMonths[iIndex + 1]
     objRanges.append((objRangeStart, objMonths[-1]))
     return objRanges
+
+
+def shift_year_of_period_range(
+    objRange: Tuple[Tuple[int, int], Tuple[int, int]],
+    iYearOffset: int,
+) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objRange
+    return (iStartYear + iYearOffset, iStartMonth), (iEndYear + iYearOffset, iEndMonth)
+
+
+def build_cp_previous_period_range_from_selected_range(
+    objRange: Tuple[Tuple[int, int], Tuple[int, int]],
+) -> Optional[Tuple[Tuple[int, int], Tuple[int, int]]]:
+    objStart, objEnd = objRange
+    objFiscalBRanges = split_by_fiscal_boundary(objStart, objEnd, 8)
+    if not objFiscalBRanges:
+        return None
+    objCurrentRange = objFiscalBRanges[-1]
+    return shift_year_of_period_range(objCurrentRange, -1)
+
+
+def write_cp_previous_period_range_file(
+    pszDirectory: str,
+    objRange: Tuple[Tuple[int, int], Tuple[int, int]],
+) -> str:
+    pszOutputPath: str = os.path.join(
+        pszDirectory,
+        "SellGeneralAdminCost_Allocation_Cmd_CP別用PreviousPeriodRange.txt",
+    )
+    objPriorRange = build_cp_previous_period_range_from_selected_range(objRange)
+    objLines: List[str] = ["前期"]
+    if objPriorRange is not None and is_month_in_range(objPriorRange[0], objRange) and is_month_in_range(objPriorRange[1], objRange):
+        (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objPriorRange
+        objLines.extend(
+            [
+                f"開始: {iStartYear:04d}/{iStartMonth:02d}",
+                f"終了: {iEndYear:04d}/{iEndMonth:02d}",
+            ]
+        )
+    else:
+        objLines.append("なし。")
+    with open(pszOutputPath, "w", encoding="utf-8", newline="") as objFile:
+        objFile.write("\n".join(objLines) + "\n")
+
+    if EXECUTION_ROOT_DIRECTORY:
+        pszPeriodDirectory = os.path.join(EXECUTION_ROOT_DIRECTORY, "期間")
+        os.makedirs(pszPeriodDirectory, exist_ok=True)
+        pszCopyPath = os.path.join(pszPeriodDirectory, os.path.basename(pszOutputPath))
+        shutil.copy2(pszOutputPath, pszCopyPath)
+
+    return pszOutputPath
 
 
 def build_cp_period_ranges_from_selected_range(
