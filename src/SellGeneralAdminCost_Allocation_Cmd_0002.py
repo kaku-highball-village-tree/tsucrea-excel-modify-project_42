@@ -2124,12 +2124,13 @@ def shift_year_of_period_range(
 
 def build_cp_previous_period_range_from_selected_range(
     objRange: Tuple[Tuple[int, int], Tuple[int, int]],
+    iBoundaryEndMonth: int,
 ) -> Optional[Tuple[Tuple[int, int], Tuple[int, int]]]:
     objStart, objEnd = objRange
-    objFiscalBRanges = split_by_fiscal_boundary(objStart, objEnd, 8)
-    if not objFiscalBRanges:
+    objFiscalRanges = split_by_fiscal_boundary(objStart, objEnd, iBoundaryEndMonth)
+    if not objFiscalRanges:
         return None
-    objCurrentRange = objFiscalBRanges[-1]
+    objCurrentRange = objFiscalRanges[-1]
     return shift_year_of_period_range(objCurrentRange, -1)
 
 
@@ -2137,22 +2138,33 @@ def write_cp_previous_period_range_file(
     pszDirectory: str,
     objRange: Tuple[Tuple[int, int], Tuple[int, int]],
 ) -> str:
+    def build_prior_block(
+        pszLabel: str,
+        iBoundaryEndMonth: int,
+    ) -> List[str]:
+        objPriorRange = build_cp_previous_period_range_from_selected_range(objRange, iBoundaryEndMonth)
+        objResultLines: List[str] = [f"{pszLabel}:", "前期"]
+        if objPriorRange is not None and is_month_in_range(objPriorRange[0], objRange) and is_month_in_range(objPriorRange[1], objRange):
+            (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objPriorRange
+            objResultLines.extend(
+                [
+                    f"開始: {iStartYear:04d}/{iStartMonth:02d}",
+                    f"終了: {iEndYear:04d}/{iEndMonth:02d}",
+                ]
+            )
+        else:
+            objResultLines.append("なし。")
+        return objResultLines
+
     pszOutputPath: str = os.path.join(
         pszDirectory,
         "SellGeneralAdminCost_Allocation_Cmd_CP別用PreviousPeriodRange.txt",
     )
-    objPriorRange = build_cp_previous_period_range_from_selected_range(objRange)
-    objLines: List[str] = ["前期"]
-    if objPriorRange is not None and is_month_in_range(objPriorRange[0], objRange) and is_month_in_range(objPriorRange[1], objRange):
-        (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objPriorRange
-        objLines.extend(
-            [
-                f"開始: {iStartYear:04d}/{iStartMonth:02d}",
-                f"終了: {iEndYear:04d}/{iEndMonth:02d}",
-            ]
-        )
-    else:
-        objLines.append("なし。")
+    objLines: List[str] = []
+    objLines.extend(build_prior_block("3月決算の会計期間", 3))
+    objLines.append("")
+    objLines.extend(build_prior_block("8月決算の会計期間", 8))
+
     with open(pszOutputPath, "w", encoding="utf-8", newline="") as objFile:
         objFile.write("\n".join(objLines) + "\n")
 
