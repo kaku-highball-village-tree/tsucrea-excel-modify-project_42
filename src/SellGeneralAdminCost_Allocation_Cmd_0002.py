@@ -2134,6 +2134,18 @@ def build_cp_previous_period_range_from_selected_range(
     return shift_year_of_period_range(objCurrentRange, -1)
 
 
+
+
+def build_cp_current_period_range_from_selected_range(
+    objRange: Tuple[Tuple[int, int], Tuple[int, int]],
+    iBoundaryEndMonth: int,
+) -> Optional[Tuple[Tuple[int, int], Tuple[int, int]]]:
+    objStart, objEnd = objRange
+    objFiscalRanges = split_by_fiscal_boundary(objStart, objEnd, iBoundaryEndMonth)
+    if not objFiscalRanges:
+        return None
+    return objFiscalRanges[-1]
+
 def write_cp_previous_period_range_file(
     pszDirectory: str,
     objRange: Tuple[Tuple[int, int], Tuple[int, int]],
@@ -2143,9 +2155,21 @@ def write_cp_previous_period_range_file(
         iBoundaryEndMonth: int,
     ) -> List[str]:
         objPriorRange = build_cp_previous_period_range_from_selected_range(objRange, iBoundaryEndMonth)
+        objCurrentRange = build_cp_current_period_range_from_selected_range(objRange, iBoundaryEndMonth)
         objResultLines: List[str] = [f"{pszLabel}:", "前期"]
         if objPriorRange is not None and is_month_in_range(objPriorRange[0], objRange) and is_month_in_range(objPriorRange[1], objRange):
             (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objPriorRange
+            objResultLines.extend(
+                [
+                    f"開始: {iStartYear:04d}/{iStartMonth:02d}",
+                    f"終了: {iEndYear:04d}/{iEndMonth:02d}",
+                ]
+            )
+        else:
+            objResultLines.append("なし。")
+        objResultLines.append("当期")
+        if objCurrentRange is not None and is_month_in_range(objCurrentRange[0], objRange) and is_month_in_range(objCurrentRange[1], objRange):
+            (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objCurrentRange
             objResultLines.extend(
                 [
                     f"開始: {iStartYear:04d}/{iStartMonth:02d}",
