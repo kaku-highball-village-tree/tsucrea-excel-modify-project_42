@@ -1975,6 +1975,17 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
         objRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]],
     ) -> List[str]:
         objResultLines: List[str] = [f"{pszLabel}:"]
+        if len(objRanges) >= 3:
+            (iTwoPeriodsAgoStartYear, iTwoPeriodsAgoStartMonth), (iTwoPeriodsAgoEndYear, iTwoPeriodsAgoEndMonth) = objRanges[-3]
+            objResultLines.extend(
+                [
+                    "2期前(前期の前期)",
+                    f"開始: {iTwoPeriodsAgoStartYear:04d}/{iTwoPeriodsAgoStartMonth:02d}",
+                    f"終了: {iTwoPeriodsAgoEndYear:04d}/{iTwoPeriodsAgoEndMonth:02d}",
+                ]
+            )
+        else:
+            objResultLines.extend(["2期前(前期の前期)", "なし。"])
         if len(objRanges) >= 2:
             (iPriorStartYear, iPriorStartMonth), (iPriorEndYear, iPriorEndMonth) = objRanges[-2]
             objResultLines.extend(
