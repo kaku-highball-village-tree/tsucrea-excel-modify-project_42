@@ -1974,7 +1974,7 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
         pszLabel: str,
         objRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]],
     ) -> List[str]:
-        objResultLines: List[str] = [f"{pszLabel}:"]
+        objResultLines: List[str] = [f"{pszLabel}:", ""]
         if len(objRanges) >= 3:
             (iTwoPeriodsAgoStartYear, iTwoPeriodsAgoStartMonth), (iTwoPeriodsAgoEndYear, iTwoPeriodsAgoEndMonth) = objRanges[-3]
             objResultLines.extend(
@@ -1982,10 +1982,11 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
                     "2期前(前期の前期)",
                     f"開始: {iTwoPeriodsAgoStartYear:04d}/{iTwoPeriodsAgoStartMonth:02d}",
                     f"終了: {iTwoPeriodsAgoEndYear:04d}/{iTwoPeriodsAgoEndMonth:02d}",
+                    "",
                 ]
             )
         else:
-            objResultLines.extend(["2期前(前期の前期)", "なし。"])
+            objResultLines.extend(["2期前(前期の前期)", "なし。", ""])
         if len(objRanges) >= 2:
             (iPriorStartYear, iPriorStartMonth), (iPriorEndYear, iPriorEndMonth) = objRanges[-2]
             objResultLines.extend(
@@ -1993,10 +1994,11 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
                     "前期",
                     f"開始: {iPriorStartYear:04d}/{iPriorStartMonth:02d}",
                     f"終了: {iPriorEndYear:04d}/{iPriorEndMonth:02d}",
+                    "",
                 ]
             )
         else:
-            objResultLines.extend(["前期", "なし。"])
+            objResultLines.extend(["前期", "なし。", ""])
         if objRanges:
             (iCurrentStartYear, iCurrentStartMonth), (iCurrentEndYear, iCurrentEndMonth) = objRanges[-1]
             objResultLines.extend(
@@ -4186,21 +4188,20 @@ def create_pj_summary(
     ).replace(".tsv", "_vertical.tsv")
 
     objSingleRows: Optional[List[List[str]]] = None
-    if os.path.isfile(pszSinglePlPath):
+    pszSinglePlStep0010Path: str = os.path.join(
+        pszDirectory,
+        f"損益計算書_販管費配賦_step0010_{iEndYear}年{pszEndMonth}月_A∪B_プロジェクト名_C∪D.tsv",
+    )
+    pszSinglePlStep0010VerticalPath: str = pszSinglePlStep0010Path.replace(
+        ".tsv",
+        "_vertical.tsv",
+    )
+    if os.path.isfile(pszSinglePlStep0010VerticalPath):
+        objSingleRows = read_tsv_rows(pszSinglePlStep0010VerticalPath)
+    elif os.path.isfile(pszSinglePlStep0010Path):
+        objSingleRows = transpose_rows(read_tsv_rows(pszSinglePlStep0010Path))
+    elif os.path.isfile(pszSinglePlPath):
         objSingleRows = read_tsv_rows(pszSinglePlPath)
-    else:
-        pszSinglePlStep0010Path: str = os.path.join(
-            pszDirectory,
-            f"損益計算書_販管費配賦_step0010_{iEndYear}年{pszEndMonth}月_A∪B_プロジェクト名_C∪D.tsv",
-        )
-        pszSinglePlStep0010VerticalPath: str = pszSinglePlStep0010Path.replace(
-            ".tsv",
-            "_vertical.tsv",
-        )
-        if os.path.isfile(pszSinglePlStep0010VerticalPath):
-            objSingleRows = read_tsv_rows(pszSinglePlStep0010VerticalPath)
-        elif os.path.isfile(pszSinglePlStep0010Path):
-            objSingleRows = transpose_rows(read_tsv_rows(pszSinglePlStep0010Path))
 
     objCumulativeRows: Optional[List[List[str]]] = None
     if os.path.isfile(pszCumulativePlPath):
