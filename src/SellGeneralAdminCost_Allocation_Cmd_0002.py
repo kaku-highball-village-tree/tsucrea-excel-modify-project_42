@@ -2254,6 +2254,21 @@ def build_cp_period_ranges_from_selected_range(
     return objResult
 
 
+def build_current_period_ranges_for_pj_summary_totals(
+    objRange: Tuple[Tuple[int, int], Tuple[int, int]],
+) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
+    objRanges = build_cp_period_ranges_from_selected_range(objRange)
+    _, objSelectedEnd = objRange
+    objCurrentRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]] = []
+    for objRangeItem in objRanges:
+        if objRangeItem[1] != objSelectedEnd:
+            continue
+        if objRangeItem in objCurrentRanges:
+            continue
+        objCurrentRanges.append(objRangeItem)
+    return objCurrentRanges
+
+
 def try_parse_float(pszText: str) -> Optional[float]:
     pszValue: str = (pszText or "").strip()
     if pszValue == "":
@@ -4201,6 +4216,7 @@ def create_pj_summary(
     pszPlPath: str,
     objRange: Tuple[Tuple[int, int], Tuple[int, int]],
     create_step0007: bool = True,
+    bWriteTotalsExcel: bool = False,
 ) -> None:
     objStart, objEnd = objRange
     pszDirectory: str = get_script_base_directory()
@@ -4805,7 +4821,7 @@ def create_pj_summary(
     )
     objStep0007Rows0005 = build_step0007_rows_for_summary_0005(pszStep0006Path0005)
     write_tsv_rows(pszStep0007Path0005, objStep0007Rows0005)
-    if objStart != objEnd:
+    if objStart != objEnd and bWriteTotalsExcel:
         insert_step0006_rows_into_group_summary_excel(
             objStep0007Rows0005,
             objStart,
@@ -4848,7 +4864,7 @@ def create_pj_summary(
     objStep0007Rows = build_step0006_rows_for_summary(read_tsv_rows(pszStep0006Path))
     pszStep0007Path: str = pszStep0006Path.replace("step0006_", "step0007_", 1)
     write_tsv_rows(pszStep0007Path, objStep0007Rows)
-    if objStart != objEnd:
+    if objStart != objEnd and bWriteTotalsExcel:
         insert_step0006_rows_into_company_summary_excel(
             objStep0007Rows,
             objStart,
@@ -5668,6 +5684,8 @@ def create_cumulative_reports(pszPlPath: str) -> None:
             append_unique_range(objFiscalBRanges[-2])
         append_unique_range(objFiscalBRanges[-1])
 
+    objTotalsExcelRanges = build_current_period_ranges_for_pj_summary_totals(objRange)
+
     for objRangeItem in objAllRanges:
         create_cumulative_report(
             pszDirectory,
@@ -5684,6 +5702,7 @@ def create_cumulative_reports(pszPlPath: str) -> None:
                 (objFiscalARanges[-1] if objFiscalARanges else None),
                 (objFiscalBRanges[-1] if objFiscalBRanges else None),
             ),
+            bWriteTotalsExcel=objRangeItem in objTotalsExcelRanges,
         )
     objMonths = build_month_sequence(objStart, objEnd)
     for objMonth in objMonths:
