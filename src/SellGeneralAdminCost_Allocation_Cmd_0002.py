@@ -1544,22 +1544,56 @@ def move_cp_step_tsv_files_to_temp_subfolders(pszBaseDirectory: str) -> None:
     pszTempDirectory: str = os.path.join(pszBaseDirectory, "temp")
     os.makedirs(pszTempDirectory, exist_ok=True)
 
-    objMonths: List[str] = [
-        "2025年04月",
-        "2025年05月",
-        "2025年06月",
-        "2025年07月",
-        "2025年08月",
-        "2025年09月",
-        "2025年10月",
-        "2025年11月",
-        "2025年12月",
-    ]
-    objCumulativeRanges: List[str] = [
-        "2025年04月-2025年08月",
-        "2025年04月-2025年12月",
-        "2025年09月-2025年12月",
-    ]
+    objSelectedRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
+    objSelectedRange: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
+    if objSelectedRangePath is not None:
+        objSelectedRange = parse_selected_range(objSelectedRangePath)
+
+    objMonths: List[str] = []
+    objCumulativeRanges: List[str] = []
+
+    def format_month_label(objYearMonth: Tuple[int, int]) -> str:
+        iYear, iMonth = objYearMonth
+        return f"{iYear}年{iMonth:02d}月"
+
+    def format_range_label(objRange: Tuple[Tuple[int, int], Tuple[int, int]]) -> str:
+        return f"{format_month_label(objRange[0])}-{format_month_label(objRange[1])}"
+
+    if objSelectedRange is not None:
+        objMonths = [format_month_label(objMonth) for objMonth in build_month_sequence(*objSelectedRange)]
+
+        objRangeItems: List[Tuple[Tuple[int, int], Tuple[int, int]]] = []
+
+        def append_unique_range(objRangeItem: Tuple[Tuple[int, int], Tuple[int, int]]) -> None:
+            if objRangeItem not in objRangeItems:
+                objRangeItems.append(objRangeItem)
+
+        append_unique_range(objSelectedRange)
+        for objRangeItem in split_by_fiscal_boundary(objSelectedRange[0], objSelectedRange[1], 3):
+            append_unique_range(objRangeItem)
+        for objRangeItem in split_by_fiscal_boundary(objSelectedRange[0], objSelectedRange[1], 8):
+            append_unique_range(objRangeItem)
+
+        objCumulativeRanges = [format_range_label(objRangeItem) for objRangeItem in objRangeItems]
+
+    if not objMonths:
+        objMonths = [
+            "2025年04月",
+            "2025年05月",
+            "2025年06月",
+            "2025年07月",
+            "2025年08月",
+            "2025年09月",
+            "2025年10月",
+            "2025年11月",
+            "2025年12月",
+        ]
+    if not objCumulativeRanges:
+        objCumulativeRanges = [
+            "2025年04月-2025年08月",
+            "2025年04月-2025年12月",
+            "2025年09月-2025年12月",
+        ]
 
     def build_step0001_to_step0004_names(pszPrefix: str, iStartStep: int) -> List[str]:
         objNames: List[str] = []
@@ -1581,12 +1615,7 @@ def move_cp_step_tsv_files_to_temp_subfolders(pszBaseDirectory: str) -> None:
             objNames.append(
                 f"{pszPrefix}step0005_単月_損益計算書_{pszMonth}_vertical.tsv"
             )
-        for pszRange in [
-            "2024年04月-2025年03月",
-            "2025年04月-2025年08月",
-            "2025年04月-2025年12月",
-            "2025年09月-2025年12月",
-        ]:
+        for pszRange in objCumulativeRanges:
             objNames.append(
                 f"{pszPrefix}step0005_累計_損益計算書_{pszRange}_vertical.tsv"
             )
