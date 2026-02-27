@@ -4186,21 +4186,20 @@ def create_pj_summary(
     ).replace(".tsv", "_vertical.tsv")
 
     objSingleRows: Optional[List[List[str]]] = None
-    if os.path.isfile(pszSinglePlPath):
+    pszSinglePlStep0010Path: str = os.path.join(
+        pszDirectory,
+        f"損益計算書_販管費配賦_step0010_{iEndYear}年{pszEndMonth}月_A∪B_プロジェクト名_C∪D.tsv",
+    )
+    pszSinglePlStep0010VerticalPath: str = pszSinglePlStep0010Path.replace(
+        ".tsv",
+        "_vertical.tsv",
+    )
+    if os.path.isfile(pszSinglePlStep0010VerticalPath):
+        objSingleRows = read_tsv_rows(pszSinglePlStep0010VerticalPath)
+    elif os.path.isfile(pszSinglePlStep0010Path):
+        objSingleRows = transpose_rows(read_tsv_rows(pszSinglePlStep0010Path))
+    elif os.path.isfile(pszSinglePlPath):
         objSingleRows = read_tsv_rows(pszSinglePlPath)
-    else:
-        pszSinglePlStep0010Path: str = os.path.join(
-            pszDirectory,
-            f"損益計算書_販管費配賦_step0010_{iEndYear}年{pszEndMonth}月_A∪B_プロジェクト名_C∪D.tsv",
-        )
-        pszSinglePlStep0010VerticalPath: str = pszSinglePlStep0010Path.replace(
-            ".tsv",
-            "_vertical.tsv",
-        )
-        if os.path.isfile(pszSinglePlStep0010VerticalPath):
-            objSingleRows = read_tsv_rows(pszSinglePlStep0010VerticalPath)
-        elif os.path.isfile(pszSinglePlStep0010Path):
-            objSingleRows = transpose_rows(read_tsv_rows(pszSinglePlStep0010Path))
 
     objCumulativeRows: Optional[List[List[str]]] = None
     if os.path.isfile(pszCumulativePlPath):
