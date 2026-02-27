@@ -1544,22 +1544,56 @@ def move_cp_step_tsv_files_to_temp_subfolders(pszBaseDirectory: str) -> None:
     pszTempDirectory: str = os.path.join(pszBaseDirectory, "temp")
     os.makedirs(pszTempDirectory, exist_ok=True)
 
-    objMonths: List[str] = [
-        "2025年04月",
-        "2025年05月",
-        "2025年06月",
-        "2025年07月",
-        "2025年08月",
-        "2025年09月",
-        "2025年10月",
-        "2025年11月",
-        "2025年12月",
-    ]
-    objCumulativeRanges: List[str] = [
-        "2025年04月-2025年08月",
-        "2025年04月-2025年12月",
-        "2025年09月-2025年12月",
-    ]
+    objSelectedRangePath: Optional[str] = find_selected_range_path(pszBaseDirectory)
+    objSelectedRange: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None
+    if objSelectedRangePath is not None:
+        objSelectedRange = parse_selected_range(objSelectedRangePath)
+
+    objMonths: List[str] = []
+    objCumulativeRanges: List[str] = []
+
+    def format_month_label(objYearMonth: Tuple[int, int]) -> str:
+        iYear, iMonth = objYearMonth
+        return f"{iYear}年{iMonth:02d}月"
+
+    def format_range_label(objRange: Tuple[Tuple[int, int], Tuple[int, int]]) -> str:
+        return f"{format_month_label(objRange[0])}-{format_month_label(objRange[1])}"
+
+    if objSelectedRange is not None:
+        objMonths = [format_month_label(objMonth) for objMonth in build_month_sequence(*objSelectedRange)]
+
+        objRangeItems: List[Tuple[Tuple[int, int], Tuple[int, int]]] = []
+
+        def append_unique_range(objRangeItem: Tuple[Tuple[int, int], Tuple[int, int]]) -> None:
+            if objRangeItem not in objRangeItems:
+                objRangeItems.append(objRangeItem)
+
+        append_unique_range(objSelectedRange)
+        for objRangeItem in split_by_fiscal_boundary(objSelectedRange[0], objSelectedRange[1], 3):
+            append_unique_range(objRangeItem)
+        for objRangeItem in split_by_fiscal_boundary(objSelectedRange[0], objSelectedRange[1], 8):
+            append_unique_range(objRangeItem)
+
+        objCumulativeRanges = [format_range_label(objRangeItem) for objRangeItem in objRangeItems]
+
+    if not objMonths:
+        objMonths = [
+            "2025年04月",
+            "2025年05月",
+            "2025年06月",
+            "2025年07月",
+            "2025年08月",
+            "2025年09月",
+            "2025年10月",
+            "2025年11月",
+            "2025年12月",
+        ]
+    if not objCumulativeRanges:
+        objCumulativeRanges = [
+            "2025年04月-2025年08月",
+            "2025年04月-2025年12月",
+            "2025年09月-2025年12月",
+        ]
 
     def build_step0001_to_step0004_names(pszPrefix: str, iStartStep: int) -> List[str]:
         objNames: List[str] = []
@@ -1581,12 +1615,7 @@ def move_cp_step_tsv_files_to_temp_subfolders(pszBaseDirectory: str) -> None:
             objNames.append(
                 f"{pszPrefix}step0005_単月_損益計算書_{pszMonth}_vertical.tsv"
             )
-        for pszRange in [
-            "2024年04月-2025年03月",
-            "2025年04月-2025年08月",
-            "2025年04月-2025年12月",
-            "2025年09月-2025年12月",
-        ]:
+        for pszRange in objCumulativeRanges:
             objNames.append(
                 f"{pszPrefix}step0005_累計_損益計算書_{pszRange}_vertical.tsv"
             )
@@ -1974,7 +2003,7 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
         pszLabel: str,
         objRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]],
     ) -> List[str]:
-        objResultLines: List[str] = [f"{pszLabel}:"]
+        objResultLines: List[str] = [f"{pszLabel}:", ""]
         if len(objRanges) >= 3:
             (iTwoPeriodsAgoStartYear, iTwoPeriodsAgoStartMonth), (iTwoPeriodsAgoEndYear, iTwoPeriodsAgoEndMonth) = objRanges[-3]
             objResultLines.extend(
@@ -1982,10 +2011,11 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
                     "2期前(前期の前期)",
                     f"開始: {iTwoPeriodsAgoStartYear:04d}/{iTwoPeriodsAgoStartMonth:02d}",
                     f"終了: {iTwoPeriodsAgoEndYear:04d}/{iTwoPeriodsAgoEndMonth:02d}",
+                    "",
                 ]
             )
         else:
-            objResultLines.extend(["2期前(前期の前期)", "なし。"])
+            objResultLines.extend(["2期前(前期の前期)", "なし。", ""])
         if len(objRanges) >= 2:
             (iPriorStartYear, iPriorStartMonth), (iPriorEndYear, iPriorEndMonth) = objRanges[-2]
             objResultLines.extend(
@@ -1993,10 +2023,11 @@ def ensure_selected_range_file(pszDirectory: str, objRange: Tuple[Tuple[int, int
                     "前期",
                     f"開始: {iPriorStartYear:04d}/{iPriorStartMonth:02d}",
                     f"終了: {iPriorEndYear:04d}/{iPriorEndMonth:02d}",
+                    "",
                 ]
             )
         else:
-            objResultLines.extend(["前期", "なし。"])
+            objResultLines.extend(["前期", "なし。", ""])
         if objRanges:
             (iCurrentStartYear, iCurrentStartMonth), (iCurrentEndYear, iCurrentEndMonth) = objRanges[-1]
             objResultLines.extend(
@@ -2156,17 +2187,18 @@ def write_cp_previous_period_range_file(
     ) -> List[str]:
         objPriorRange = build_cp_previous_period_range_from_selected_range(objRange, iBoundaryEndMonth)
         objCurrentRange = build_cp_current_period_range_from_selected_range(objRange, iBoundaryEndMonth)
-        objResultLines: List[str] = [f"{pszLabel}:", "前期"]
+        objResultLines: List[str] = [f"{pszLabel}:", "", "前期"]
         if objPriorRange is not None and is_month_in_range(objPriorRange[0], objRange) and is_month_in_range(objPriorRange[1], objRange):
             (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objPriorRange
             objResultLines.extend(
                 [
                     f"開始: {iStartYear:04d}/{iStartMonth:02d}",
                     f"終了: {iEndYear:04d}/{iEndMonth:02d}",
+                    "",
                 ]
             )
         else:
-            objResultLines.append("なし。")
+            objResultLines.extend(["なし。", ""])
         objResultLines.append("当期")
         if objCurrentRange is not None and is_month_in_range(objCurrentRange[0], objRange) and is_month_in_range(objCurrentRange[1], objRange):
             (iStartYear, iStartMonth), (iEndYear, iEndMonth) = objCurrentRange
@@ -4186,21 +4218,20 @@ def create_pj_summary(
     ).replace(".tsv", "_vertical.tsv")
 
     objSingleRows: Optional[List[List[str]]] = None
-    if os.path.isfile(pszSinglePlPath):
+    pszSinglePlStep0010Path: str = os.path.join(
+        pszDirectory,
+        f"損益計算書_販管費配賦_step0010_{iEndYear}年{pszEndMonth}月_A∪B_プロジェクト名_C∪D.tsv",
+    )
+    pszSinglePlStep0010VerticalPath: str = pszSinglePlStep0010Path.replace(
+        ".tsv",
+        "_vertical.tsv",
+    )
+    if os.path.isfile(pszSinglePlStep0010VerticalPath):
+        objSingleRows = read_tsv_rows(pszSinglePlStep0010VerticalPath)
+    elif os.path.isfile(pszSinglePlStep0010Path):
+        objSingleRows = transpose_rows(read_tsv_rows(pszSinglePlStep0010Path))
+    elif os.path.isfile(pszSinglePlPath):
         objSingleRows = read_tsv_rows(pszSinglePlPath)
-    else:
-        pszSinglePlStep0010Path: str = os.path.join(
-            pszDirectory,
-            f"損益計算書_販管費配賦_step0010_{iEndYear}年{pszEndMonth}月_A∪B_プロジェクト名_C∪D.tsv",
-        )
-        pszSinglePlStep0010VerticalPath: str = pszSinglePlStep0010Path.replace(
-            ".tsv",
-            "_vertical.tsv",
-        )
-        if os.path.isfile(pszSinglePlStep0010VerticalPath):
-            objSingleRows = read_tsv_rows(pszSinglePlStep0010VerticalPath)
-        elif os.path.isfile(pszSinglePlStep0010Path):
-            objSingleRows = transpose_rows(read_tsv_rows(pszSinglePlStep0010Path))
 
     objCumulativeRows: Optional[List[List[str]]] = None
     if os.path.isfile(pszCumulativePlPath):
