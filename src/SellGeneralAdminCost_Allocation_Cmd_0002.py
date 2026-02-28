@@ -2254,6 +2254,68 @@ def build_cp_period_ranges_from_selected_range(
     return objResult
 
 
+def build_cp_period_ranges_from_previous_period_range_file(
+    pszDirectory: str,
+) -> Tuple[List[Tuple[Tuple[int, int], Tuple[int, int]]], List[Tuple[Tuple[int, int], Tuple[int, int]]]]:
+    pszPath: str = os.path.join(
+        pszDirectory,
+        "SellGeneralAdminCost_Allocation_Cmd_CP別用PreviousPeriodRange.txt",
+    )
+    if not os.path.isfile(pszPath):
+        return [], []
+
+    try:
+        with open(pszPath, "r", encoding="utf-8", newline="") as objFile:
+            objLines: List[str] = [pszLine.strip() for pszLine in objFile.readlines()]
+    except OSError:
+        return [], []
+
+    objAllRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]] = []
+    objCurrentRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]] = []
+
+    def parse_range_lines(iIndexStart: int) -> Optional[Tuple[Tuple[int, int], Tuple[int, int]]]:
+        if iIndexStart + 2 >= len(objLines):
+            return None
+        objStartMatch = re.match(r"^開始:\s*(\d{4})/(\d{2})$", objLines[iIndexStart + 1])
+        objEndMatch = re.match(r"^終了:\s*(\d{4})/(\d{2})$", objLines[iIndexStart + 2])
+        if objStartMatch is None or objEndMatch is None:
+            return None
+        iStartYear = int(objStartMatch.group(1))
+        iStartMonth = int(objStartMatch.group(2))
+        iEndYear = int(objEndMatch.group(1))
+        iEndMonth = int(objEndMatch.group(2))
+        if not (1 <= iStartMonth <= 12 and 1 <= iEndMonth <= 12):
+            return None
+        return (iStartYear, iStartMonth), (iEndYear, iEndMonth)
+
+    def append_unique(
+        objTarget: List[Tuple[Tuple[int, int], Tuple[int, int]]],
+        objRangeItem: Tuple[Tuple[int, int], Tuple[int, int]],
+    ) -> None:
+        if objRangeItem not in objTarget:
+            objTarget.append(objRangeItem)
+
+    iIndex: int = 0
+    while iIndex < len(objLines):
+        pszLine: str = objLines[iIndex]
+        if pszLine == "前期":
+            objPriorRange = parse_range_lines(iIndex)
+            if objPriorRange is not None:
+                append_unique(objAllRanges, objPriorRange)
+            iIndex += 1
+            continue
+        if pszLine == "当期":
+            objCurrentRange = parse_range_lines(iIndex)
+            if objCurrentRange is not None:
+                append_unique(objAllRanges, objCurrentRange)
+                append_unique(objCurrentRanges, objCurrentRange)
+            iIndex += 1
+            continue
+        iIndex += 1
+
+    return objAllRanges, objCurrentRanges
+
+
 def build_current_period_ranges_for_pj_summary_totals(
     objRange: Tuple[Tuple[int, int], Tuple[int, int]],
 ) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
@@ -5665,24 +5727,26 @@ def create_cumulative_reports(pszPlPath: str) -> None:
     ensure_selected_range_file(pszDirectory, objRange)
 
     objStart, objEnd = objRange
-    objFiscalARanges = split_by_fiscal_boundary(objStart, objEnd, 3)
-    objFiscalBRanges = split_by_fiscal_boundary(objStart, objEnd, 8)
-    objAllRanges: List[Tuple[Tuple[int, int], Tuple[int, int]]] = []
+    objAllRanges, objCurrentRanges = build_cp_period_ranges_from_previous_period_range_file(pszDirectory)
+    if not objAllRanges:
+        objFiscalARanges = split_by_fiscal_boundary(objStart, objEnd, 3)
+        objFiscalBRanges = split_by_fiscal_boundary(objStart, objEnd, 8)
 
-    def append_unique_range(
-        objTargetRange: Tuple[Tuple[int, int], Tuple[int, int]]
-    ) -> None:
-        if objTargetRange not in objAllRanges:
-            objAllRanges.append(objTargetRange)
+        def append_unique_range(
+            objTargetRange: Tuple[Tuple[int, int], Tuple[int, int]]
+        ) -> None:
+            if objTargetRange not in objAllRanges:
+                objAllRanges.append(objTargetRange)
 
-    if objFiscalARanges:
-        if len(objFiscalARanges) >= 2:
-            append_unique_range(objFiscalARanges[-2])
-        append_unique_range(objFiscalARanges[-1])
-    if objFiscalBRanges:
-        if len(objFiscalBRanges) >= 2:
-            append_unique_range(objFiscalBRanges[-2])
-        append_unique_range(objFiscalBRanges[-1])
+        if objFiscalARanges:
+            if len(objFiscalARanges) >= 2:
+                append_unique_range(objFiscalARanges[-2])
+            append_unique_range(objFiscalARanges[-1])
+        if objFiscalBRanges:
+            if len(objFiscalBRanges) >= 2:
+                append_unique_range(objFiscalBRanges[-2])
+            append_unique_range(objFiscalBRanges[-1])
+        objCurrentRanges = build_cp_period_ranges_from_selected_range(objRange)
 
     objTotalsExcelRanges = build_current_period_ranges_for_pj_summary_totals(objRange)
 
@@ -5697,11 +5761,7 @@ def create_cumulative_reports(pszPlPath: str) -> None:
         create_pj_summary(
             pszPlPath,
             objRangeItem,
-            create_step0007=objRangeItem
-            in (
-                (objFiscalARanges[-1] if objFiscalARanges else None),
-                (objFiscalBRanges[-1] if objFiscalBRanges else None),
-            ),
+            create_step0007=objRangeItem in objCurrentRanges,
             bWriteTotalsExcel=objRangeItem in objTotalsExcelRanges,
         )
     objMonths = build_month_sequence(objStart, objEnd)
@@ -7315,15 +7375,9 @@ def build_prior_range_for_cumulative(
 ) -> Optional[Tuple[Tuple[int, int], Tuple[int, int]]]:
     iStartYear, iStartMonth = objStart
     iEndYear, iEndMonth = objEnd
-    if iStartMonth == 4:
-        return (iStartYear - 1, 4), (iStartYear, 3)
-    if iStartMonth > 4:
-        return (iStartYear, 4), (iStartYear, iStartMonth - 1)
-    if iStartMonth <= 3:
-        return (iStartYear - 1, 4), (iStartYear - 1, 12)
-    if iStartYear > 0:
-        return (iStartYear - 1, iStartMonth), (iEndYear - 1, iEndMonth)
-    return None
+    if iStartYear <= 0 or iEndYear <= 0:
+        return None
+    return (iStartYear - 1, iStartMonth), (iEndYear - 1, iEndMonth)
 
 
 def build_cp_group_step0008_vertical(
